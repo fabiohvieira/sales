@@ -1,0 +1,83 @@
+version: "3"
+
+services:
+  mysql:
+    image: mysql
+    restart: always
+    container_name: mysql
+    hostname: mysql
+    networks:
+      - broker-kafka
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: sales
+      MYSQL_USER: user
+      MYSQL_PASSWORD: password
+    ports:
+      - 3306:3306
+    volumes:
+      - .db:/var/lib/mysql
+
+  sales:
+    build:
+      context: .
+      dockerfile: .setup/build/dev/Dockerfile
+    restart: always
+    container_name: sales
+    hostname: sales
+    networks:
+      - broker-kafka
+    ports:
+      - 3000:3000
+    depends_on:
+      - mysql
+    volumes:
+      - .:/app
+  
+  zookeeper:
+    image: confluentinc/cp-zookeeper:latest
+    hostname: zookeeper
+    container_name: zookeeper
+    networks:
+      - broker-kafka
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+
+  kafka:
+    image: confluentinc/cp-kafka:latest
+    hostname: kafka
+    container_name: kafka
+    networks:
+      - broker-kafka
+    depends_on:
+      - zookeeper
+    ports:
+      - 9092:9092
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_CREATE_TOPICS: "sales:3:1"
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+  
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    hostname: kafka-ui
+    container_name: kafka-ui
+    ports:
+      - 8080:8080
+    networks:
+      - broker-kafka
+    depends_on:
+      - kafka
+    environment:
+      KAFKA_CLUSTERS_0_NAME: "local"
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: "kafka:29092"
+      KAFKA_CLUSTERS_0_ZOOKEEPER: "zookeeper:2181"
+
+networks:
+  broker-kafka:
+    driver: bridge
